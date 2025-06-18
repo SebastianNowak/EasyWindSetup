@@ -1038,6 +1038,9 @@ class VIEW3D_PT_easywindsetup_panel(bpy.types.Panel):
         # updater
         addon_updater_ops.check_for_update_background()
 
+        # updater
+        addon_updater_ops.update_notice_box_ui(self, context)
+
         # --- DODATKOWE PRZYCISKI NA GÓRZE ---
         layout.operator("object.break_object_apart", text="Break Object apart")
         layout.separator()
@@ -1110,9 +1113,6 @@ class VIEW3D_PT_easywindsetup_panel(bpy.types.Panel):
             context.scene,
             "leaf_objects_index"
         )
-
-        # updater
-        addon_updater_ops.update_notice_box_ui(self, context)
 
 def register():
     bpy.utils.register_class(TRUNK_UL_object_list)
