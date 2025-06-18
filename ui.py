@@ -23,6 +23,9 @@ from bpy.types import Panel
 import mathutils
 import re
 import difflib
+import bmesh
+from mathutils import Vector
+import mathutils
 
 #
 # Add additional functions here
@@ -72,6 +75,7 @@ class OBJECT_OT_load_trunk(bpy.types.Operator):
 class OBJECT_OT_clear_trunk_objects(bpy.types.Operator):
     bl_idname = "object.clear_trunk_objects"
     bl_label = "Clear"
+    bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
         context.scene.trunk_objects.clear()
@@ -106,6 +110,7 @@ class OBJECT_OT_load_branch(bpy.types.Operator):
 class OBJECT_OT_clear_branch_objects(bpy.types.Operator):
     bl_idname = "object.clear_branch_objects"
     bl_label = "Clear"
+    bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
         context.scene.branch_objects.clear()
@@ -140,6 +145,7 @@ class OBJECT_OT_load_leaf(bpy.types.Operator):
 class OBJECT_OT_clear_leaf_objects(bpy.types.Operator):
     bl_idname = "object.clear_leaf_objects"
     bl_label = "Clear"
+    bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
         context.scene.leaf_objects.clear()
@@ -149,6 +155,7 @@ class OBJECT_OT_set_pivot_to_meshes_auto(bpy.types.Operator):
     """Set Pivot to Meshes (auto)"""
     bl_idname = "object.set_pivot_to_meshes_auto"
     bl_label = "Set Pivot to Meshes (auto)"
+    bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
         import time
@@ -239,57 +246,567 @@ class OBJECT_OT_set_pivot_to_meshes_auto(bpy.types.Operator):
         return {'FINISHED'}
 
 class OBJECT_OT_pivot_to_center(bpy.types.Operator):
+    """Move pivot point to (0,0,0) without moving geometry"""
     bl_idname = "object.pivot_to_center"
     bl_label = "Pivot to center"
+    bl_options = {'REGISTER', 'UNDO'}
     def execute(self, context):
-        self.report({'INFO'}, "Pivot to center pressed")
+        obj = context.object
+        if obj is None or obj.type != 'MESH':
+            self.report({'WARNING'}, "No mesh object selected!")
+            return {'CANCELLED'}
+
+        # Get current object location and pivot position
+        original_location = obj.location.copy()
+
+        # Przesunięcie obiektu do 0,0,0
+        bpy.context.scene.cursor.location = (0.0, 0.0, 0.0)  # Set 3D cursor at (0, 0, 0)
+        bpy.ops.object.origin_set(type='ORIGIN_CURSOR')  # Set the pivot to the cursor
         return {'FINISHED'}
 
 class OBJECT_OT_break_object_apart(bpy.types.Operator):
+    """Separate all vertex groups into individual objects"""
     bl_idname = "object.break_object_apart"
     bl_label = "Break Object apart"
+    bl_options = {'REGISTER', 'UNDO'}
     def execute(self, context):
-        self.report({'INFO'}, "Break Object apart pressed")
+        obj = context.object
+        if obj is None or obj.type != 'MESH':
+            self.report({'WARNING'}, "No mesh object selected!")
+            return {'CANCELLED'}
+
+        # Go to edit mode and select all vertices
+        bpy.ops.object.mode_set(mode='EDIT')
+        bpy.ops.mesh.select_all(action='SELECT')
+
+        # Separate by loose parts
+        bpy.ops.mesh.separate(type='LOOSE')
+
+        # Return to object mode
+        bpy.ops.object.mode_set(mode='OBJECT')
         return {'FINISHED'}
 
 class OBJECT_OT_set_pivot_to_mesh_manually(bpy.types.Operator):
     bl_idname = "object.set_pivot_to_mesh_manually"
-    bl_label = "Set Pivot to Mesh (manually)"
+    bl_label = "Set Pivot to Mesh (🡓) (manually)"
+    bl_options = {'REGISTER', 'UNDO'}
     def execute(self, context):
-        self.report({'INFO'}, "Set Pivot to Mesh (manually) pressed")
+        selected_objects = context.selected_objects
+        if not selected_objects:
+            self.report({'WARNING'}, "No objects selected!")
+            return {'CANCELLED'}
+
+        for obj in selected_objects:
+            if obj.type != 'MESH':
+                self.report({'WARNING'}, f"Skipping {obj.name}, as it is not a mesh object.")
+                continue
+
+            # Store the current active object
+            original_active_object = context.view_layer.objects.active
+
+            # Switch to edit mode for the current object
+            bpy.context.view_layer.objects.active = obj
+            bpy.ops.object.mode_set(mode='EDIT')
+
+            # Get mesh data and find the two lowest vertices
+            bm = bmesh.from_edit_mesh(obj.data)
+            lowest_verts = sorted(bm.verts, key=lambda v: v.co.z)[:2]
+
+            if len(lowest_verts) < 2:
+                self.report({'WARNING'}, f"{obj.name} has less than two vertices!")
+                bpy.ops.object.mode_set(mode='OBJECT')
+                continue
+
+            # Calculate the midpoint of the two lowest vertices
+            mid_point = (lowest_verts[0].co + lowest_verts[1].co) / 2
+
+            # Wypisz wartość mid_point w konsoli Blender'a
+            print(f"Object: {obj.name}, Midpoint: {mid_point}")
+
+            # Switch back to object mode
+            bpy.ops.object.mode_set(mode='OBJECT')
+
+            # Set the cursor to the calculated midpoint in world space
+            bpy.context.scene.cursor.location = obj.matrix_world @ mid_point
+
+            # Set the origin to the cursor without moving the object
+            bpy.ops.object.select_all(action='DESELECT')  # Deselect all objects
+            obj.select_set(True)  # Select the current object
+            bpy.ops.object.origin_set(type='ORIGIN_CURSOR', center='BOUNDS')
+
+            # Restore the original active object
+            bpy.context.view_layer.objects.active = original_active_object
         return {'FINISHED'}
+
+class OBJECT_OT_set_pivot_to_mesh_manually_up(bpy.types.Operator):
+    bl_idname = "object.set_pivot_to_mesh_manually_up"
+    bl_label = "Set Pivot To Mesh (🡑) (manually)"
+    bl_options = {'REGISTER', 'UNDO'}
+    def execute(self, context):
+        selected_objects = context.selected_objects
+        if not selected_objects:
+            self.report({'WARNING'}, "No objects selected!")
+            return {'CANCELLED'}
+
+        for obj in selected_objects:
+            if obj.type != 'MESH':
+                self.report({'WARNING'}, f"Skipping {obj.name}, as it is not a mesh object.")
+                continue
+
+            # Store the current active object
+            original_active_object = context.view_layer.objects.active
+
+            # Switch to edit mode for the current object
+            bpy.context.view_layer.objects.active = obj
+            bpy.ops.object.mode_set(mode='EDIT')
+
+            # Get mesh data and find the two highest vertices
+            bm = bmesh.from_edit_mesh(obj.data)
+            highest_verts = sorted(bm.verts, key=lambda v: v.co.z, reverse=True)[:2]
+
+            if len(highest_verts) < 2:
+                self.report({'WARNING'}, f"{obj.name} has less than two vertices!")
+                bpy.ops.object.mode_set(mode='OBJECT')
+                continue
+
+            # Calculate the midpoint of the two highest vertices
+            mid_point = (highest_verts[0].co + highest_verts[1].co) / 2
+
+            # Wypisz wartość mid_point w konsoli Blender'a
+            print(f"Object: {obj.name}, Midpoint: {mid_point}")
+
+            # Switch back to object mode
+            bpy.ops.object.mode_set(mode='OBJECT')
+
+            # Set the cursor to the calculated midpoint in world space
+            bpy.context.scene.cursor.location = obj.matrix_world @ mid_point
+
+            # Set the origin to the cursor without moving the object
+            bpy.ops.object.select_all(action='DESELECT')  # Deselect all objects
+            obj.select_set(True)  # Select the current object
+            bpy.ops.object.origin_set(type='ORIGIN_CURSOR', center='BOUNDS')
+
+            # Restore the original active object
+            bpy.context.view_layer.objects.active = original_active_object
+        return {'FINISHED'}
+
+def boundboxAxis(pp, obj):
+    """Estimates the X vector from the origin point and boundbox vertices."""
+    bbvv = [None for _ in range(8)]
+    bbLength = [None for _ in range(8)]
+    ws = obj.matrix_world.to_scale()
+
+    for i in range(8):
+        bbvv[i] = mathutils.Vector((
+            obj.bound_box[i][0] * ws[0],
+            obj.bound_box[i][1] * ws[1],
+            obj.bound_box[i][2] * ws[2]
+        ))  # Create a vector list for each vert of the bounding box (from origin point)
+        bbLength[i] = bbvv[i].length  # Create list with the lengths
+
+    # Find the furthest points from origin
+    highestVertexId = 0
+    for i in range(1, 8):  # Find the furthest point
+        if bbLength[highestVertexId] < bbLength[i]:
+            highestVertexId = i
+
+    fvidlist = []
+    for i in range(8):  # Check if other vertex have roughly the same distance
+        if bbLength[i] >= (bbLength[highestVertexId] * 0.95):  # Tolerance range for similar distances
+            fvidlist.append(i)
+
+    # Get an average position
+    axisdir = mathutils.Vector((0.0, 0.0, 0.0))
+    for i in range(len(fvidlist)):
+        axisdir += bbvv[fvidlist[i]]
+    axisdir /= len(fvidlist)
+
+    vecout = axisdir.normalized()
+    axisextent = axisdir.length
+    return vecout, axisextent
 
 class OBJECT_OT_fix_pivot_rotation(bpy.types.Operator):
     bl_idname = "object.fix_pivot_rotation"
     bl_label = "Fix Pivot Rotation"
+    bl_options = {'REGISTER', 'UNDO'}
     def execute(self, context):
-        self.report({'INFO'}, "Fix Pivot Rotation pressed")
+        selected_objects = context.selected_objects
+        if not selected_objects:
+            self.report({'WARNING'}, "No objects selected!")
+            return {'CANCELLED'}
+
+        for obj in selected_objects:
+            if obj.type != 'MESH':
+                self.report({'WARNING'}, f"Skipping {obj.name}, as it is not a mesh object.")
+                continue
+
+            original_active_object = context.view_layer.objects.active
+            # Calculate the bounding box axis
+            direction, extent = boundboxAxis(None, obj)
+
+            # Calculate the rotation matrix to align X-axis to the direction vector
+            rotation_matrix = direction.to_track_quat('X', 'Z').to_matrix().to_4x4()
+
+            # Store the original matrix
+            original_location = obj.matrix_world.to_translation()
+
+            # Apply the rotation to the pivot point only
+            obj.matrix_world = rotation_matrix @ obj.matrix_world
+
+            # Reset geometry to original position
+            obj.data.transform(rotation_matrix.inverted())
+
+            obj.location = original_location
         return {'FINISHED'}
 
 class OBJECT_OT_set_pivot_from_uv(bpy.types.Operator):
     bl_idname = "object.set_pivot_from_uv"
     bl_label = "Set Pivot from UV"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    uv_x = bpy.props.FloatProperty(
+        name="UV X",
+        description="UV X coordinate (0-1)",
+        default=0.5,
+        min=-10.0,
+        max=10.0
+    )
+    uv_y = bpy.props.FloatProperty(
+        name="UV Y",
+        description="UV Y coordinate (0-1)",
+        default=0.5,
+        min=-10.0,
+        max=10.0
+    )
     def execute(self, context):
-        self.report({'INFO'}, "Set Pivot from UV pressed")
+        selected_objects = context.selected_objects
+        if not selected_objects:
+            self.report({'WARNING'}, "No objects selected!")
+            return {'CANCELLED'}
+
+        for obj in selected_objects:
+            if obj.type != 'MESH':
+                self.report({'WARNING'}, f"Skipping {obj.name}, as it is not a mesh object.")
+                continue
+
+            # Sprawdź, czy obiekt ma aktywną mapę UV
+            if not obj.data.uv_layers.active:
+                self.report({'WARNING'}, f"{obj.name} has no active UV map!")
+                continue
+
+            uv_layer = obj.data.uv_layers.active
+            loops = obj.data.loops
+            verts = obj.data.vertices
+
+            # Szukamy pętli (loop) z UV najbliższym podanym wartościom uv_x i uv_y
+            desired_uv = Vector((self.uv_x, self.uv_y))
+            closest_vert_index = None
+            closest_distance = float('inf')
+
+            for poly in obj.data.polygons:
+                for loop_index in poly.loop_indices:
+                    uv_coords = uv_layer.data[loop_index].uv
+                    dist = (uv_coords - desired_uv).length
+                    if dist < closest_distance:
+                        closest_distance = dist
+                        closest_vert_index = loops[loop_index].vertex_index
+
+            if closest_vert_index is None:
+                self.report({'WARNING'}, f"No suitable UV coordinate found in {obj.name}")
+                continue
+
+            # Wyznaczamy pozycję wierzchołka w przestrzeni świata
+            vert_local_pos = verts[closest_vert_index].co
+            vert_world_pos = obj.matrix_world @ vert_local_pos
+
+            # Ustawiamy pivot w tym punkcie
+            bpy.context.scene.cursor.location = vert_world_pos
+
+            # Musimy zresetować selekcję i ustawić obiekt jako aktywny,
+            # aby "origin_set" zadziałało poprawnie tylko na bieżącym obiekcie.
+            bpy.ops.object.select_all(action='DESELECT')
+            obj.select_set(True)
+            bpy.context.view_layer.objects.active = obj
+
+            bpy.ops.object.origin_set(type='ORIGIN_CURSOR', center='BOUNDS')
         return {'FINISHED'}
 
 class OBJECT_OT_fix_pivot_rotation_from_uv(bpy.types.Operator):
     bl_idname = "object.fix_pivot_rotation_from_uv"
     bl_label = "Fix Pivot Rotation from UV"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    uv_x = bpy.props.FloatProperty(
+        name="UV X",
+        description="UV X coordinate (0-1)",
+        default=0.5,
+        min=0.0,
+        max=1.0
+    )
+    uv_y = bpy.props.FloatProperty(
+        name="UV Y",
+        description="UV Y coordinate (0-1)",
+        default=0.5,
+        min=0.0,
+        max=1.0
+    )
     def execute(self, context):
-        self.report({'INFO'}, "Fix Pivot Rotation from UV pressed")
+        selected_objects = context.selected_objects
+        if not selected_objects:
+            self.report({'WARNING'}, "No objects selected!")
+            return {'CANCELLED'}
+
+        for obj in selected_objects:
+            if obj.type != 'MESH':
+                self.report({'WARNING'}, f"Skipping {obj.name}, because it is not a mesh object.")
+                continue
+
+            # Sprawdź, czy obiekt ma aktywną mapę UV
+            uv_layers = obj.data.uv_layers
+            if not uv_layers.active:
+                self.report({'WARNING'}, f"{obj.name} has no active UV map!")
+                continue
+
+            uv_layer = uv_layers.active
+            loops = obj.data.loops
+            verts = obj.data.vertices
+
+            # Szukamy wierzchołka o UV najbliższym do (uv_x, uv_y)
+            desired_uv = Vector((self.uv_x, self.uv_y))
+            closest_vert_index = None
+            closest_distance = float('inf')
+
+            for poly in obj.data.polygons:
+                for loop_index in poly.loop_indices:
+                    uv_coords = uv_layer.data[loop_index].uv
+                    dist = (uv_coords - desired_uv).length
+                    if dist < closest_distance:
+                        closest_distance = dist
+                        closest_vert_index = loops[loop_index].vertex_index
+
+            if closest_vert_index is None:
+                self.report({'WARNING'}, f"No suitable UV coordinate found in {obj.name}!")
+                continue
+
+            # Pozycja wierzchołka w przestrzeni lokalnej i światowej
+            vert_local_pos = verts[closest_vert_index].co
+            vert_world_pos = obj.matrix_world @ vert_local_pos
+
+            # Kierunek, w którym będziemy ustawiać oś X (od środka obiektu do tego wierzchołka)
+            direction_local = vert_local_pos.normalized()
+            # Jeśli wektor jest (0,0,0), nie można ustalić kierunku
+            if direction_local.length == 0:
+                self.report({'WARNING'}, f"Vertex in {obj.name} is at origin; cannot set rotation.")
+                continue
+
+            # Tworzymy macierz rotacji, wyrównując oś X do direction_local
+            rotation_matrix = direction_local.to_track_quat('X', 'Z').to_matrix().to_4x4()
+
+            # Zapisujemy oryginalną pozycję (lub całą macierz - w zależności od preferencji)
+            original_location = obj.matrix_world.to_translation()
+
+            # Obrót pivotu (macierz świata)
+            obj.matrix_world = rotation_matrix @ obj.matrix_world
+
+            # Reset geometrii, aby nie przemieściła się w przestrzeni
+            obj.data.transform(rotation_matrix.inverted())
+
+            # Przywracamy jedynie pozycję
+            obj.location = original_location
         return {'FINISHED'}
 
 class OBJECT_OT_fix_pivot_rotation_from_uv_xz(bpy.types.Operator):
     bl_idname = "object.fix_pivot_rotation_from_uv_xz"
     bl_label = "Fix Pivot Rotation from UV (X & Z)"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    # Ustawiane przez użytkownika współrzędne UV (oś X)
+    uv_x = bpy.props.FloatProperty(
+        name="UV X",
+        description="UV X coordinate (0-1) for X-axis direction",
+        default=0.5,
+        min=0.0,
+        max=1.0
+    )
+    uv_y = bpy.props.FloatProperty(
+        name="UV Y",
+        description="UV Y coordinate (0-1) for X-axis direction",
+        default=0.5,
+        min=0.0,
+        max=1.0
+    )
+
+    # Skrajne wartości UV.x, względem których wyznaczamy wierzchołki do ustawienia osi Z
+    uv_x_min = bpy.props.FloatProperty(
+        name="UV X Min",
+        description="Lower extreme for UV X (default 0.0)",
+        default=0.0,
+        min=0.0,
+        max=1.0
+    )
+    uv_x_max = bpy.props.FloatProperty(
+        name="UV X Max",
+        description="Upper extreme for UV X (default 1.0)",
+        default=1.0,
+        min=0.0,
+        max=1.0
+    )
+    # Tolerancja, by znaleźć wierzchołki 'blisko' krawędzi min i max
+    tolerance = bpy.props.FloatProperty(
+        name="Tolerance",
+        description="Threshold near UV X Min/Max for collecting extreme vertices",
+        default=0.01,
+        min=0.0,
+        max=0.5
+    )
+
+    # Nowa właściwość - checkbox do odwrócenia osi Z
+    reverse_z = bpy.props.BoolProperty(
+        name="Reverse Z Axis",
+        description="Flip Z-axis direction after it is computed",
+        default=False
+    )
     def execute(self, context):
-        self.report({'INFO'}, "Fix Pivot Rotation from UV (X & Z) pressed")
+        selected_objects = context.selected_objects
+        if not selected_objects:
+            self.report({'WARNING'}, "No objects selected!")
+            return {'CANCELLED'}
+
+        for obj in selected_objects:
+            if obj.type != 'MESH':
+                self.report({'WARNING'}, f"Skipping {obj.name}, not a mesh object.")
+                continue
+
+            # Sprawdź aktywną mapę UV
+            if not obj.data.uv_layers.active:
+                self.report({'WARNING'}, f"{obj.name} has no active UV map!")
+                continue
+
+            uv_layer = obj.data.uv_layers.active
+            loops = obj.data.loops
+            verts = obj.data.vertices
+
+            # -----------------------------------------------------------
+            # 1) Znajdź wierzchołek najbliższy (uv_x, uv_y) => kierunek osi X
+            # -----------------------------------------------------------
+            target_uv = Vector((self.uv_x, self.uv_y))
+            closest_vert_index = None
+            closest_dist = float('inf')
+
+            # -----------------------------------------------------------
+            # 2) Zbierz wierzchołki skrajne w UV.x => kierunek osi Z
+            # -----------------------------------------------------------
+            extreme_verts = []  # wierzchołki w strefach 'min' i 'max'
+            min_edge = self.uv_x_min + self.tolerance
+            max_edge = self.uv_x_max - self.tolerance
+
+            for poly in obj.data.polygons:
+                for loop_index in poly.loop_indices:
+                    uv_coords = uv_layer.data[loop_index].uv
+                    vertex_idx = loops[loop_index].vertex_index
+
+                    # Szukanie wierzchołka (X-axis)
+                    dist = (uv_coords - target_uv).length
+                    if dist < closest_dist:
+                        closest_dist = dist
+                        closest_vert_index = vertex_idx
+
+                    # Zbieranie wierzchołków skrajnych (Z-axis)
+                    if uv_coords.x <= min_edge or uv_coords.x >= max_edge:
+                        extreme_verts.append(vertex_idx)
+
+            if closest_vert_index is None:
+                self.report({'WARNING'}, f"No suitable UV coordinate for X-axis in {obj.name}.")
+                continue
+            if not extreme_verts:
+                self.report({'WARNING'}, f"No extreme UV.x vertices found in {obj.name} (check tolerance?).")
+                continue
+
+            # -----------------------------------------------------------
+            # 3) Obliczenie wektora dla osi X
+            # -----------------------------------------------------------
+            vert_local_pos_x = verts[closest_vert_index].co
+            if vert_local_pos_x.length == 0:
+                self.report({'WARNING'}, f"Vertex for X-axis in {obj.name} is at origin; cannot set rotation.")
+                continue
+
+            direction_local_x = vert_local_pos_x.normalized()
+
+            # -----------------------------------------------------------
+            # 4) Obliczenie wektora dla osi Z (średnia skrajnych wierzchołków)
+            # -----------------------------------------------------------
+            sum_extreme = Vector((0.0, 0.0, 0.0))
+            for v_idx in extreme_verts:
+                sum_extreme += verts[v_idx].co
+            avg_extreme_local = sum_extreme / len(extreme_verts)
+
+            if avg_extreme_local.length == 0:
+                self.report({'WARNING'}, f"Extreme vertices in {obj.name} cannot define a valid Z-axis.")
+                continue
+
+            direction_local_z = avg_extreme_local.normalized()
+
+            # -----------------------------------------------------------
+            # 5) Ortonormalizacja (X, Y, Z)
+            # -----------------------------------------------------------
+            X_ = direction_local_x
+            Z_ = direction_local_z
+
+            # Początkowy Y = Z x X
+            Y_ = Z_.cross(X_)
+            if Y_.length == 0:
+                self.report({'WARNING'}, f"X-axis and Z-axis are parallel for {obj.name}; cannot set full rotation.")
+                continue
+            Y_.normalize()
+
+            # Z = X x Y
+            Z_ = X_.cross(Y_)
+            Z_.normalize()
+
+            # X = Y x Z (ostatecznie, aby spójnie ortonormalizować)
+            X_ = Y_.cross(Z_)
+            X_.normalize()
+
+            # -----------------------------------------------------------
+            # 5a) Odwracanie osi Z (jeśli użytkownik wybrał taką opcję)
+            # -----------------------------------------------------------
+            if self.reverse_z:
+                Z_ = -Z_
+                # Po odwróceniu Z_ ponownie ortonormalizujemy układ
+                Y_ = Z_.cross(X_)
+                Y_.normalize()
+                Z_ = X_.cross(Y_)
+                Z_.normalize()
+                X_ = Y_.cross(Z_)
+                X_.normalize()
+
+            # Budujemy macierz 3x3
+            rot_mat_3x3 = mathutils.Matrix([
+                [X_.x, Y_.x, Z_.x],
+                [X_.y, Y_.y, Z_.y],
+                [X_.z, Y_.z, Z_.z]
+            ])
+            rotation_matrix = rot_mat_3x3.to_4x4()
+
+            # -----------------------------------------------------------
+            # 6) Nałożenie rotacji pivotu, zachowanie pozycji obiektu
+            # -----------------------------------------------------------
+            original_location = obj.matrix_world.to_translation()
+
+            # Obracamy pivot
+            obj.matrix_world = rotation_matrix @ obj.matrix_world
+
+            # Reset geometrii (odwrotna macierz)
+            obj.data.transform(rotation_matrix.inverted())
+
+            # Przywracamy wyłącznie pozycję
+            obj.location = original_location
         return {'FINISHED'}
 
 class OBJECT_OT_get_by_names(bpy.types.Operator):
     bl_idname = "object.get_by_names"
     bl_label = "Get by names"
+    bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
         scene = context.scene
@@ -525,7 +1042,9 @@ class VIEW3D_PT_easywindsetup_panel(bpy.types.Panel):
         layout.operator("object.break_object_apart", text="Break Object apart")
         layout.separator()
         layout.operator("object.pivot_to_center", text="Pivot to center")
-        layout.operator("object.set_pivot_to_mesh_manually", text="Set Pivot to Mesh (manually)")
+        row = layout.row(align=True)
+        row.operator("object.set_pivot_to_mesh_manually", text="Set Pivot to Mesh (🡓) (manually)")
+        row.operator("object.set_pivot_to_mesh_manually_up", text="Set Pivot To Mesh (🡑) (manually)")
         layout.operator("object.set_pivot_from_uv", text="Set Pivot from UV")
         layout.separator()
         layout.operator("object.fix_pivot_rotation", text="Fix Pivot Rotation")
@@ -615,6 +1134,7 @@ def register():
     bpy.utils.register_class(OBJECT_OT_pivot_to_center)
     bpy.utils.register_class(OBJECT_OT_break_object_apart)
     bpy.utils.register_class(OBJECT_OT_set_pivot_to_mesh_manually)
+    bpy.utils.register_class(OBJECT_OT_set_pivot_to_mesh_manually_up)
     bpy.utils.register_class(OBJECT_OT_fix_pivot_rotation)
     bpy.utils.register_class(OBJECT_OT_set_pivot_from_uv)
     bpy.utils.register_class(OBJECT_OT_fix_pivot_rotation_from_uv)
@@ -642,6 +1162,7 @@ def unregister():
     bpy.utils.unregister_class(OBJECT_OT_pivot_to_center)
     bpy.utils.unregister_class(OBJECT_OT_break_object_apart)
     bpy.utils.unregister_class(OBJECT_OT_set_pivot_to_mesh_manually)
+    bpy.utils.unregister_class(OBJECT_OT_set_pivot_to_mesh_manually_up)
     bpy.utils.unregister_class(OBJECT_OT_fix_pivot_rotation)
     bpy.utils.unregister_class(OBJECT_OT_set_pivot_from_uv)
     bpy.utils.unregister_class(OBJECT_OT_fix_pivot_rotation_from_uv)
@@ -666,6 +1187,7 @@ def unregister():
     bpy.utils.unregister_class(OBJECT_OT_pivot_to_center)
     bpy.utils.unregister_class(OBJECT_OT_break_object_apart)
     bpy.utils.unregister_class(OBJECT_OT_set_pivot_to_mesh_manually)
+    bpy.utils.unregister_class(OBJECT_OT_set_pivot_to_mesh_manually_up)
     bpy.utils.unregister_class(OBJECT_OT_fix_pivot_rotation)
     bpy.utils.unregister_class(OBJECT_OT_set_pivot_from_uv)
     bpy.utils.unregister_class(OBJECT_OT_fix_pivot_rotation_from_uv)
