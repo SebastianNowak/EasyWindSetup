@@ -15,6 +15,7 @@
 # along with this program. If not, see <http://www.gnu.org/licenses/>.
 
 import bpy
+from . import addon_updater_ops
 from bpy.types import Panel
 
 #
@@ -26,13 +27,15 @@ class VIEW3D_PT_easywindsetup_panel(bpy.types.Panel):
     bl_label = "Easy Wind Setup"
     bl_idname = "VIEW3D_PT_easywindsetup_panel"
     bl_space_type = 'VIEW_3D'
-    bl_region_type = 'UI'
-    bl_category = 'Tarzvilla Tools'
+    bl_region_type = 'Easy Wind Setup'
+    bl_region_type = 'TOOLS' if bpy.app.version < (2, 80) else 'UI'
+    bl_context = "objectmode"
+    bl_category = "Easy Wind Setup"
 
     def draw(self, context):
         layout = self.layout
         # updater
-        addon_updater_ops.check_for_update_background(context)
+        addon_updater_ops.check_for_update_background()
 
         layout.label(text="Hello from Easy Wind Setup Panel!")
 
