@@ -18,7 +18,7 @@ bl_info = {
         "name": "Easy Wind Setup",
         "description": "Add-on to provide tools for easy wind setup.",
         "author": "Sebastian Nowak, Angelika Hryciuk-Nowak",
-        "version": (0, 0, 1),
+        "version": (0, 0, 2),
         "blender": (2, 80, 0),
         "location": "View 3D > Tool Shelf > Easy Wind Setup",
         "warning": "", # used for warning icon and text in add-ons panel
