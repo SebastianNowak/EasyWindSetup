@@ -32,7 +32,7 @@ from bpy.props import BoolProperty
 # Add additional functions or classes here
 #
 
-class TrankObjectItem(bpy.types.PropertyGroup):
+class TrunkObjectItem(bpy.types.PropertyGroup):
     name = bpy.props.StringProperty()
 
 class BranchObjectItem(bpy.types.PropertyGroup):
@@ -44,17 +44,17 @@ class LeafObjectItem(bpy.types.PropertyGroup):
 # This is where you assign any variables you need in your script. Note that they
 # won't always be assigned to the Scene object but it's a good place to start.
 def register():
-    bpy.utils.register_class(TrankObjectItem)
+    bpy.utils.register_class(TrunkObjectItem)
     bpy.utils.register_class(BranchObjectItem)
     bpy.utils.register_class(LeafObjectItem)
-    bpy.types.Scene.trank_objects = bpy.props.CollectionProperty(type=TrankObjectItem)
+    bpy.types.Scene.trunk_objects = bpy.props.CollectionProperty(type=TrunkObjectItem)
     bpy.types.Scene.branch_objects = bpy.props.CollectionProperty(type=BranchObjectItem)
     bpy.types.Scene.leaf_objects = bpy.props.CollectionProperty(type=LeafObjectItem)
 
 def unregister():
-    del bpy.types.Scene.trank_objects
+    del bpy.types.Scene.trunk_objects
     del bpy.types.Scene.branch_objects
     del bpy.types.Scene.leaf_objects
-    bpy.utils.unregister_class(TrankObjectItem)
+    bpy.utils.unregister_class(TrunkObjectItem)
     bpy.utils.unregister_class(BranchObjectItem)
     bpy.utils.unregister_class(LeafObjectItem)
