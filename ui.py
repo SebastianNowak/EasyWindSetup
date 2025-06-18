@@ -142,6 +142,16 @@ class OBJECT_OT_clear_leaf_objects(bpy.types.Operator):
         context.scene.leaf_objects.clear()
         return {'FINISHED'}
 
+class OBJECT_OT_set_pivot_to_meshes_auto(bpy.types.Operator):
+    """Set Pivot to Meshes (auto)"""
+    bl_idname = "object.set_pivot_to_meshes_auto"
+    bl_label = "Set Pivot to Meshes (auto)"
+
+    def execute(self, context):
+        # Tu można dodać logikę ustawiania pivotów
+        self.report({'INFO'}, "Set Pivot to Meshes (auto) executed")
+        return {'FINISHED'}
+
 class VIEW3D_PT_easywindsetup_panel(bpy.types.Panel):
     """Creates a Panel in the 3D View"""
     bl_label = "Easy Wind Setup"
@@ -172,6 +182,16 @@ class VIEW3D_PT_easywindsetup_panel(bpy.types.Panel):
             context.scene,
             "trank_objects_index"
         )
+
+        # Przycisk pod box_objects
+        enabled = (
+            len(context.scene.trank_objects) > 0 and
+            len(context.scene.branch_objects) > 0 and
+            len(context.scene.leaf_objects) > 0
+        )
+        row = layout.row()
+        row.enabled = enabled
+        row.operator("object.set_pivot_to_meshes_auto", icon="PIVOT_BOUNDBOX")
 
         # Branches
         box_objects.operator("object.load_branch")
@@ -220,6 +240,7 @@ def register():
     bpy.utils.register_class(OBJECT_OT_clear_branch_objects)
     bpy.utils.register_class(OBJECT_OT_load_leaf)
     bpy.utils.register_class(OBJECT_OT_clear_leaf_objects)
+    bpy.utils.register_class(OBJECT_OT_set_pivot_to_meshes_auto)
     bpy.utils.register_class(VIEW3D_PT_easywindsetup_panel)
 
 def unregister():
@@ -238,4 +259,5 @@ def unregister():
     bpy.utils.unregister_class(OBJECT_OT_clear_branch_objects)
     bpy.utils.unregister_class(OBJECT_OT_load_leaf)
     bpy.utils.unregister_class(OBJECT_OT_clear_leaf_objects)
+    bpy.utils.unregister_class(OBJECT_OT_set_pivot_to_meshes_auto)
     bpy.utils.unregister_class(VIEW3D_PT_easywindsetup_panel)
