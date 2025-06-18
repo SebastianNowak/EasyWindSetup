@@ -174,7 +174,7 @@ class OBJECT_OT_set_pivot_to_meshes_auto(bpy.types.Operator):
                 mat = obj.matrix_world
                 branch_verts.extend([mat @ v.co for v in mesh.vertices])
 
-        # Dla każdego branch: szukaj najbliższego vertexu w trunk względem vertexów branch
+        # Dla każdego branch: znajdź najbliższy vertex w trunk względem vertexów branch i ustaw pivot na tym vertexie
         if trunk_verts:
             for name in branch_names:
                 obj = bpy.data.objects.get(name)
@@ -182,34 +182,22 @@ class OBJECT_OT_set_pivot_to_meshes_auto(bpy.types.Operator):
                     obj_mesh = obj.data
                     obj_mat = obj.matrix_world
                     verts_global = [obj_mat @ v.co for v in obj_mesh.vertices]
-                    # Szukaj najbliższej pary (vertex z branch, vertex z trunk)
                     min_dist = None
-                    nearest_trunk = None
-                    nearest_branch = None
+                    nearest_branch_v = None
+                    nearest_trunk_v = None
                     for v_branch in verts_global:
                         for v_trunk in trunk_verts:
                             dist = (v_branch - v_trunk).length
                             if min_dist is None or dist < min_dist:
                                 min_dist = dist
-                                nearest_trunk = v_trunk
-                                nearest_branch = v_branch
-                    if nearest_trunk is not None:
-                        # Znajdź 4 najbliższe vertexy w branch względem nearest_trunk
-                        verts_with_dist = sorted(
-                            [(v, (v - nearest_trunk).length) for v in verts_global],
-                            key=lambda x: x[1]
-                        )
-                        closest_verts = [v for v, d in verts_with_dist[:4]]
-                        if closest_verts:
-                            avg = mathutils.Vector((0, 0, 0))
-                            for v in closest_verts:
-                                avg += v
-                            avg /= len(closest_verts)
-                            delta = avg - obj.location
-                            obj.data.transform(mathutils.Matrix.Translation(-delta))
-                            obj.location = avg
+                                nearest_trunk_v = v_trunk
+                                nearest_branch_v = v_branch
+                    if nearest_branch_v is not None:
+                        delta = nearest_branch_v - obj.location
+                        obj.data.transform(mathutils.Matrix.Translation(-delta))
+                        obj.location = nearest_branch_v
 
-        # Dla każdego leaf: szukaj najbliższego vertexu w branch względem vertexów leaf
+        # Dla każdego leaf: znajdź najbliższy vertex w branch względem vertexów leaf i ustaw pivot na tym vertexie
         if branch_verts:
             for name in leaf_names:
                 obj = bpy.data.objects.get(name)
@@ -217,32 +205,20 @@ class OBJECT_OT_set_pivot_to_meshes_auto(bpy.types.Operator):
                     obj_mesh = obj.data
                     obj_mat = obj.matrix_world
                     verts_global = [obj_mat @ v.co for v in obj_mesh.vertices]
-                    # Szukaj najbliższej pary (vertex z leaf, vertex z branch)
                     min_dist = None
-                    nearest_branch = None
-                    nearest_leaf = None
+                    nearest_leaf_v = None
+                    nearest_branch_v = None
                     for v_leaf in verts_global:
                         for v_branch in branch_verts:
                             dist = (v_leaf - v_branch).length
                             if min_dist is None or dist < min_dist:
                                 min_dist = dist
-                                nearest_branch = v_branch
-                                nearest_leaf = v_leaf
-                    if nearest_branch is not None:
-                        # Znajdź 4 najbliższe vertexy w leaf względem nearest_branch
-                        verts_with_dist = sorted(
-                            [(v, (v - nearest_branch).length) for v in verts_global],
-                            key=lambda x: x[1]
-                        )
-                        closest_verts = [v for v, d in verts_with_dist[:4]]
-                        if closest_verts:
-                            avg = mathutils.Vector((0, 0, 0))
-                            for v in closest_verts:
-                                avg += v
-                            avg /= len(closest_verts)
-                            delta = avg - obj.location
-                            obj.data.transform(mathutils.Matrix.Translation(-delta))
-                            obj.location = avg
+                                nearest_branch_v = v_branch
+                                nearest_leaf_v = v_leaf
+                    if nearest_leaf_v is not None:
+                        delta = nearest_leaf_v - obj.location
+                        obj.data.transform(mathutils.Matrix.Translation(-delta))
+                        obj.location = nearest_leaf_v
 
         self.report({'INFO'}, "Pivots set for branch and leaf objects")
         return {'FINISHED'}
@@ -642,6 +618,30 @@ def unregister():
     bpy.utils.unregister_class(BRANCH_UL_object_list)
     bpy.utils.unregister_class(LEAF_UL_object_list)
     bpy.utils.unregister_class(OBJECT_OT_load_trunk)
+    bpy.utils.unregister_class(OBJECT_OT_clear_trunk_objects)
+    bpy.utils.unregister_class(OBJECT_OT_load_branch)
+    bpy.utils.unregister_class(OBJECT_OT_clear_branch_objects)
+    bpy.utils.unregister_class(OBJECT_OT_load_leaf)
+    bpy.utils.unregister_class(OBJECT_OT_clear_leaf_objects)
+    bpy.utils.unregister_class(OBJECT_OT_set_pivot_to_meshes_auto)
+    bpy.utils.unregister_class(OBJECT_OT_pivot_to_center)
+    bpy.utils.unregister_class(OBJECT_OT_break_object_apart)
+    bpy.utils.unregister_class(OBJECT_OT_set_pivot_to_mesh_manually)
+    bpy.utils.unregister_class(OBJECT_OT_fix_pivot_rotation)
+    bpy.utils.unregister_class(OBJECT_OT_set_pivot_from_uv)
+    bpy.utils.unregister_class(OBJECT_OT_fix_pivot_rotation_from_uv)
+    bpy.utils.unregister_class(OBJECT_OT_fix_pivot_rotation_from_uv_xz)
+    bpy.utils.unregister_class(OBJECT_OT_get_by_names)
+    bpy.utils.unregister_class(VIEW3D_PT_easywindsetup_panel)
+    bpy.utils.unregister_class(VIEW3D_PT_easywindsetup_panel)
+    bpy.utils.unregister_class(OBJECT_OT_set_pivot_to_mesh_manually)
+    bpy.utils.unregister_class(OBJECT_OT_fix_pivot_rotation)
+    bpy.utils.unregister_class(OBJECT_OT_set_pivot_from_uv)
+    bpy.utils.unregister_class(OBJECT_OT_fix_pivot_rotation_from_uv)
+    bpy.utils.unregister_class(OBJECT_OT_fix_pivot_rotation_from_uv_xz)
+    bpy.utils.unregister_class(OBJECT_OT_get_by_names)
+    bpy.utils.unregister_class(VIEW3D_PT_easywindsetup_panel)
+    bpy.utils.unregister_class(VIEW3D_PT_easywindsetup_panel)
     bpy.utils.unregister_class(OBJECT_OT_clear_trunk_objects)
     bpy.utils.unregister_class(OBJECT_OT_load_branch)
     bpy.utils.unregister_class(OBJECT_OT_clear_branch_objects)
