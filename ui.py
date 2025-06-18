@@ -152,8 +152,9 @@ class OBJECT_OT_set_pivot_to_meshes_auto(bpy.types.Operator):
         scene = context.scene
         trank_names = [item.name for item in scene.trank_objects]
         branch_names = [item.name for item in scene.branch_objects]
+        leaf_names = [item.name for item in scene.leaf_objects]
 
-        # Zbierz wszystkie współrzędne wierzchołków z obiektów trank (w globalnych)
+        # Zbierz wszystkie vertexy z trank (w globalnych)
         trank_verts = []
         for name in trank_names:
             obj = bpy.data.objects.get(name)
@@ -162,31 +163,86 @@ class OBJECT_OT_set_pivot_to_meshes_auto(bpy.types.Operator):
                 mat = obj.matrix_world
                 trank_verts.extend([mat @ v.co for v in mesh.vertices])
 
-        if not trank_verts:
-            self.report({'WARNING'}, "No vertices found in trank objects!")
-            return {'CANCELLED'}
-
-        # Dla każdego obiektu branch znajdź najbliższy vertex i ustaw pivot
+        # Zbierz wszystkie vertexy z branch (w globalnych)
+        branch_verts = []
         for name in branch_names:
             obj = bpy.data.objects.get(name)
             if obj and obj.type == 'MESH':
-                # Znajdź najbliższy vertex
-                obj_loc = obj.location
-                min_dist = None
-                nearest = None
-                for v in trank_verts:
-                    dist = (obj_loc - v).length
-                    if min_dist is None or dist < min_dist:
-                        min_dist = dist
-                        nearest = v
-                if nearest is not None:
-                    # Przesuń pivot (origin) obiektu na pozycję nearest
-                    # Zachowaj transformację obiektu
-                    delta = nearest - obj.location
-                    obj.data.transform(mathutils.Matrix.Translation(-delta))
-                    obj.location = nearest
+                mesh = obj.data
+                mat = obj.matrix_world
+                branch_verts.extend([mat @ v.co for v in mesh.vertices])
 
-        self.report({'INFO'}, "Pivots set for branch objects")
+        # Dla każdego branch: szukaj najbliższego vertexu w trank względem vertexów branch
+        if trank_verts:
+            for name in branch_names:
+                obj = bpy.data.objects.get(name)
+                if obj and obj.type == 'MESH':
+                    obj_mesh = obj.data
+                    obj_mat = obj.matrix_world
+                    verts_global = [obj_mat @ v.co for v in obj_mesh.vertices]
+                    # Szukaj najbliższej pary (vertex z branch, vertex z trank)
+                    min_dist = None
+                    nearest_trank = None
+                    nearest_branch = None
+                    for v_branch in verts_global:
+                        for v_trank in trank_verts:
+                            dist = (v_branch - v_trank).length
+                            if min_dist is None or dist < min_dist:
+                                min_dist = dist
+                                nearest_trank = v_trank
+                                nearest_branch = v_branch
+                    if nearest_trank is not None:
+                        # Znajdź 4 najbliższe vertexy w branch względem nearest_trank
+                        verts_with_dist = sorted(
+                            [(v, (v - nearest_trank).length) for v in verts_global],
+                            key=lambda x: x[1]
+                        )
+                        closest_verts = [v for v, d in verts_with_dist[:4]]
+                        if closest_verts:
+                            avg = mathutils.Vector((0, 0, 0))
+                            for v in closest_verts:
+                                avg += v
+                            avg /= len(closest_verts)
+                            delta = avg - obj.location
+                            obj.data.transform(mathutils.Matrix.Translation(-delta))
+                            obj.location = avg
+
+        # Dla każdego leaf: szukaj najbliższego vertexu w branch względem vertexów leaf
+        if branch_verts:
+            for name in leaf_names:
+                obj = bpy.data.objects.get(name)
+                if obj and obj.type == 'MESH':
+                    obj_mesh = obj.data
+                    obj_mat = obj.matrix_world
+                    verts_global = [obj_mat @ v.co for v in obj_mesh.vertices]
+                    # Szukaj najbliższej pary (vertex z leaf, vertex z branch)
+                    min_dist = None
+                    nearest_branch = None
+                    nearest_leaf = None
+                    for v_leaf in verts_global:
+                        for v_branch in branch_verts:
+                            dist = (v_leaf - v_branch).length
+                            if min_dist is None or dist < min_dist:
+                                min_dist = dist
+                                nearest_branch = v_branch
+                                nearest_leaf = v_leaf
+                    if nearest_branch is not None:
+                        # Znajdź 4 najbliższe vertexy w leaf względem nearest_branch
+                        verts_with_dist = sorted(
+                            [(v, (v - nearest_branch).length) for v in verts_global],
+                            key=lambda x: x[1]
+                        )
+                        closest_verts = [v for v, d in verts_with_dist[:4]]
+                        if closest_verts:
+                            avg = mathutils.Vector((0, 0, 0))
+                            for v in closest_verts:
+                                avg += v
+                            avg /= len(closest_verts)
+                            delta = avg - obj.location
+                            obj.data.transform(mathutils.Matrix.Translation(-delta))
+                            obj.location = avg
+
+        self.report({'INFO'}, "Pivots set for branch and leaf objects")
         return {'FINISHED'}
 
 class VIEW3D_PT_easywindsetup_panel(bpy.types.Panel):
