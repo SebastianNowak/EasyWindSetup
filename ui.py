@@ -245,60 +245,23 @@ class OBJECT_OT_set_pivot_to_meshes_auto(bpy.types.Operator):
         self.report({'INFO'}, "Pivots set for branch and leaf objects")
         return {'FINISHED'}
 
-class OBJECT_OT_pivot_to_center(bpy.types.Operator):
-    """Move pivot point to (0,0,0) without moving geometry"""
-    bl_idname = "object.pivot_to_center"
-    bl_label = "Pivot to center"
-    bl_options = {'REGISTER', 'UNDO'}
-    def execute(self, context):
-        obj = context.object
-        if obj is None or obj.type != 'MESH':
-            self.report({'WARNING'}, "No mesh object selected!")
-            return {'CANCELLED'}
-
-        # Get current object location and pivot position
-        original_location = obj.location.copy()
-
-        # Przesunięcie obiektu do 0,0,0
-        bpy.context.scene.cursor.location = (0.0, 0.0, 0.0)  # Set 3D cursor at (0, 0, 0)
-        bpy.ops.object.origin_set(type='ORIGIN_CURSOR')  # Set the pivot to the cursor
-        return {'FINISHED'}
-
-class OBJECT_OT_break_object_apart(bpy.types.Operator):
-    """Separate all vertex groups into individual objects"""
-    bl_idname = "object.break_object_apart"
-    bl_label = "Break Object apart"
-    bl_options = {'REGISTER', 'UNDO'}
-    def execute(self, context):
-        obj = context.object
-        if obj is None or obj.type != 'MESH':
-            self.report({'WARNING'}, "No mesh object selected!")
-            return {'CANCELLED'}
-
-        # Go to edit mode and select all vertices
-        bpy.ops.object.mode_set(mode='EDIT')
-        bpy.ops.mesh.select_all(action='SELECT')
-
-        # Separate by loose parts
-        bpy.ops.mesh.separate(type='LOOSE')
-
-        # Return to object mode
-        bpy.ops.object.mode_set(mode='OBJECT')
-        return {'FINISHED'}
-
 class OBJECT_OT_set_pivot_to_mesh_manually(bpy.types.Operator):
     bl_idname = "object.set_pivot_to_mesh_manually"
     bl_label = "Set Pivot to Mesh (🡓) (manually)"
     bl_options = {'REGISTER', 'UNDO'}
     def execute(self, context):
+        import time
         selected_objects = context.selected_objects
         if not selected_objects:
             self.report({'WARNING'}, "No objects selected!")
             return {'CANCELLED'}
 
-        for obj in selected_objects:
+        wm = context.window_manager
+        wm.progress_begin(0, len(selected_objects))
+        for idx, obj in enumerate(selected_objects):
             if obj.type != 'MESH':
                 self.report({'WARNING'}, f"Skipping {obj.name}, as it is not a mesh object.")
+                wm.progress_update(idx + 1)
                 continue
 
             # Store the current active object
@@ -336,6 +299,8 @@ class OBJECT_OT_set_pivot_to_mesh_manually(bpy.types.Operator):
 
             # Restore the original active object
             bpy.context.view_layer.objects.active = original_active_object
+            wm.progress_update(idx + 1)
+        wm.progress_end()
         return {'FINISHED'}
 
 class OBJECT_OT_set_pivot_to_mesh_manually_up(bpy.types.Operator):
@@ -343,14 +308,18 @@ class OBJECT_OT_set_pivot_to_mesh_manually_up(bpy.types.Operator):
     bl_label = "Set Pivot To Mesh (🡑) (manually)"
     bl_options = {'REGISTER', 'UNDO'}
     def execute(self, context):
+        import time
         selected_objects = context.selected_objects
         if not selected_objects:
             self.report({'WARNING'}, "No objects selected!")
             return {'CANCELLED'}
 
-        for obj in selected_objects:
+        wm = context.window_manager
+        wm.progress_begin(0, len(selected_objects))
+        for idx, obj in enumerate(selected_objects):
             if obj.type != 'MESH':
                 self.report({'WARNING'}, f"Skipping {obj.name}, as it is not a mesh object.")
+                wm.progress_update(idx + 1)
                 continue
 
             # Store the current active object
@@ -388,6 +357,8 @@ class OBJECT_OT_set_pivot_to_mesh_manually_up(bpy.types.Operator):
 
             # Restore the original active object
             bpy.context.view_layer.objects.active = original_active_object
+            wm.progress_update(idx + 1)
+        wm.progress_end()
         return {'FINISHED'}
 
 def boundboxAxis(pp, obj):
@@ -430,14 +401,18 @@ class OBJECT_OT_fix_pivot_rotation(bpy.types.Operator):
     bl_label = "Fix Pivot Rotation"
     bl_options = {'REGISTER', 'UNDO'}
     def execute(self, context):
+        import time
         selected_objects = context.selected_objects
         if not selected_objects:
             self.report({'WARNING'}, "No objects selected!")
             return {'CANCELLED'}
 
-        for obj in selected_objects:
+        wm = context.window_manager
+        wm.progress_begin(0, len(selected_objects))
+        for idx, obj in enumerate(selected_objects):
             if obj.type != 'MESH':
                 self.report({'WARNING'}, f"Skipping {obj.name}, as it is not a mesh object.")
+                wm.progress_update(idx + 1)
                 continue
 
             original_active_object = context.view_layer.objects.active
@@ -457,6 +432,8 @@ class OBJECT_OT_fix_pivot_rotation(bpy.types.Operator):
             obj.data.transform(rotation_matrix.inverted())
 
             obj.location = original_location
+            wm.progress_update(idx + 1)
+        wm.progress_end()
         return {'FINISHED'}
 
 class OBJECT_OT_set_pivot_from_uv(bpy.types.Operator):
@@ -479,19 +456,24 @@ class OBJECT_OT_set_pivot_from_uv(bpy.types.Operator):
         max=10.0
     )
     def execute(self, context):
+        import time
         selected_objects = context.selected_objects
         if not selected_objects:
             self.report({'WARNING'}, "No objects selected!")
             return {'CANCELLED'}
 
-        for obj in selected_objects:
+        wm = context.window_manager
+        wm.progress_begin(0, len(selected_objects))
+        for idx, obj in enumerate(selected_objects):
             if obj.type != 'MESH':
                 self.report({'WARNING'}, f"Skipping {obj.name}, as it is not a mesh object.")
+                wm.progress_update(idx + 1)
                 continue
 
             # Sprawdź, czy obiekt ma aktywną mapę UV
             if not obj.data.uv_layers.active:
                 self.report({'WARNING'}, f"{obj.name} has no active UV map!")
+                wm.progress_update(idx + 1)
                 continue
 
             uv_layer = obj.data.uv_layers.active
@@ -513,6 +495,7 @@ class OBJECT_OT_set_pivot_from_uv(bpy.types.Operator):
 
             if closest_vert_index is None:
                 self.report({'WARNING'}, f"No suitable UV coordinate found in {obj.name}")
+                wm.progress_update(idx + 1)
                 continue
 
             # Wyznaczamy pozycję wierzchołka w przestrzeni świata
@@ -529,6 +512,8 @@ class OBJECT_OT_set_pivot_from_uv(bpy.types.Operator):
             bpy.context.view_layer.objects.active = obj
 
             bpy.ops.object.origin_set(type='ORIGIN_CURSOR', center='BOUNDS')
+            wm.progress_update(idx + 1)
+        wm.progress_end()
         return {'FINISHED'}
 
 class OBJECT_OT_fix_pivot_rotation_from_uv(bpy.types.Operator):
@@ -551,20 +536,25 @@ class OBJECT_OT_fix_pivot_rotation_from_uv(bpy.types.Operator):
         max=1.0
     )
     def execute(self, context):
+        import time
         selected_objects = context.selected_objects
         if not selected_objects:
             self.report({'WARNING'}, "No objects selected!")
             return {'CANCELLED'}
 
-        for obj in selected_objects:
+        wm = context.window_manager
+        wm.progress_begin(0, len(selected_objects))
+        for idx, obj in enumerate(selected_objects):
             if obj.type != 'MESH':
                 self.report({'WARNING'}, f"Skipping {obj.name}, because it is not a mesh object.")
+                wm.progress_update(idx + 1)
                 continue
 
             # Sprawdź, czy obiekt ma aktywną mapę UV
             uv_layers = obj.data.uv_layers
             if not uv_layers.active:
                 self.report({'WARNING'}, f"{obj.name} has no active UV map!")
+                wm.progress_update(idx + 1)
                 continue
 
             uv_layer = uv_layers.active
@@ -586,6 +576,7 @@ class OBJECT_OT_fix_pivot_rotation_from_uv(bpy.types.Operator):
 
             if closest_vert_index is None:
                 self.report({'WARNING'}, f"No suitable UV coordinate found in {obj.name}!")
+                wm.progress_update(idx + 1)
                 continue
 
             # Pozycja wierzchołka w przestrzeni lokalnej i światowej
@@ -597,6 +588,7 @@ class OBJECT_OT_fix_pivot_rotation_from_uv(bpy.types.Operator):
             # Jeśli wektor jest (0,0,0), nie można ustalić kierunku
             if direction_local.length == 0:
                 self.report({'WARNING'}, f"Vertex in {obj.name} is at origin; cannot set rotation.")
+                wm.progress_update(idx + 1)
                 continue
 
             # Tworzymy macierz rotacji, wyrównując oś X do direction_local
@@ -613,6 +605,8 @@ class OBJECT_OT_fix_pivot_rotation_from_uv(bpy.types.Operator):
 
             # Przywracamy jedynie pozycję
             obj.location = original_location
+            wm.progress_update(idx + 1)
+        wm.progress_end()
         return {'FINISHED'}
 
 class OBJECT_OT_fix_pivot_rotation_from_uv_xz(bpy.types.Operator):
@@ -667,19 +661,24 @@ class OBJECT_OT_fix_pivot_rotation_from_uv_xz(bpy.types.Operator):
         default=False
     )
     def execute(self, context):
+        import time
         selected_objects = context.selected_objects
         if not selected_objects:
             self.report({'WARNING'}, "No objects selected!")
             return {'CANCELLED'}
 
-        for obj in selected_objects:
+        wm = context.window_manager
+        wm.progress_begin(0, len(selected_objects))
+        for idx, obj in enumerate(selected_objects):
             if obj.type != 'MESH':
                 self.report({'WARNING'}, f"Skipping {obj.name}, not a mesh object.")
+                wm.progress_update(idx + 1)
                 continue
 
             # Sprawdź aktywną mapę UV
             if not obj.data.uv_layers.active:
                 self.report({'WARNING'}, f"{obj.name} has no active UV map!")
+                wm.progress_update(idx + 1)
                 continue
 
             uv_layer = obj.data.uv_layers.active
@@ -717,9 +716,11 @@ class OBJECT_OT_fix_pivot_rotation_from_uv_xz(bpy.types.Operator):
 
             if closest_vert_index is None:
                 self.report({'WARNING'}, f"No suitable UV coordinate for X-axis in {obj.name}.")
+                wm.progress_update(idx + 1)
                 continue
             if not extreme_verts:
                 self.report({'WARNING'}, f"No extreme UV.x vertices found in {obj.name} (check tolerance?).")
+                wm.progress_update(idx + 1)
                 continue
 
             # -----------------------------------------------------------
@@ -728,6 +729,7 @@ class OBJECT_OT_fix_pivot_rotation_from_uv_xz(bpy.types.Operator):
             vert_local_pos_x = verts[closest_vert_index].co
             if vert_local_pos_x.length == 0:
                 self.report({'WARNING'}, f"Vertex for X-axis in {obj.name} is at origin; cannot set rotation.")
+                wm.progress_update(idx + 1)
                 continue
 
             direction_local_x = vert_local_pos_x.normalized()
@@ -742,6 +744,7 @@ class OBJECT_OT_fix_pivot_rotation_from_uv_xz(bpy.types.Operator):
 
             if avg_extreme_local.length == 0:
                 self.report({'WARNING'}, f"Extreme vertices in {obj.name} cannot define a valid Z-axis.")
+                wm.progress_update(idx + 1)
                 continue
 
             direction_local_z = avg_extreme_local.normalized()
@@ -756,6 +759,7 @@ class OBJECT_OT_fix_pivot_rotation_from_uv_xz(bpy.types.Operator):
             Y_ = Z_.cross(X_)
             if Y_.length == 0:
                 self.report({'WARNING'}, f"X-axis and Z-axis are parallel for {obj.name}; cannot set full rotation.")
+                wm.progress_update(idx + 1)
                 continue
             Y_.normalize()
 
@@ -801,6 +805,8 @@ class OBJECT_OT_fix_pivot_rotation_from_uv_xz(bpy.types.Operator):
 
             # Przywracamy wyłącznie pozycję
             obj.location = original_location
+            wm.progress_update(idx + 1)
+        wm.progress_end()
         return {'FINISHED'}
 
 class OBJECT_OT_get_by_names(bpy.types.Operator):
