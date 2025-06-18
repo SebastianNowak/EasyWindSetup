@@ -151,6 +151,7 @@ class OBJECT_OT_set_pivot_to_meshes_auto(bpy.types.Operator):
     bl_label = "Set Pivot to Meshes (auto)"
 
     def execute(self, context):
+        import time
         scene = context.scene
         trunk_names = [item.name for item in scene.trunk_objects]
         branch_names = [item.name for item in scene.branch_objects]
@@ -174,6 +175,13 @@ class OBJECT_OT_set_pivot_to_meshes_auto(bpy.types.Operator):
                 mat = obj.matrix_world
                 branch_verts.extend([mat @ v.co for v in mesh.vertices])
 
+        # Loader/progress bar setup
+        total = len(branch_names) + len(leaf_names)
+        done = 0
+
+        wm = context.window_manager
+        wm.progress_begin(0, total)
+
         # Dla każdego branch: znajdź najbliższy vertex w trunk względem vertexów branch i ustaw pivot na tym vertexie
         if trunk_verts:
             for name in branch_names:
@@ -196,6 +204,9 @@ class OBJECT_OT_set_pivot_to_meshes_auto(bpy.types.Operator):
                         delta = nearest_branch_v - obj.location
                         obj.data.transform(mathutils.Matrix.Translation(-delta))
                         obj.location = nearest_branch_v
+                done += 1
+                wm.progress_update(done)
+                # time.sleep(0.01) # optionally slow down for testing
 
         # Dla każdego leaf: znajdź najbliższy vertex w branch względem vertexów leaf i ustaw pivot na tym vertexie
         if branch_verts:
@@ -219,7 +230,11 @@ class OBJECT_OT_set_pivot_to_meshes_auto(bpy.types.Operator):
                         delta = nearest_leaf_v - obj.location
                         obj.data.transform(mathutils.Matrix.Translation(-delta))
                         obj.location = nearest_leaf_v
+                done += 1
+                wm.progress_update(done)
+                # time.sleep(0.01) # optionally slow down for testing
 
+        wm.progress_end()
         self.report({'INFO'}, "Pivots set for branch and leaf objects")
         return {'FINISHED'}
 
