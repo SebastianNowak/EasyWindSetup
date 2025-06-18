@@ -20,6 +20,7 @@ from . import properties
 from .properties import TrankObjectItem, BranchObjectItem, LeafObjectItem
 from bpy.props import CollectionProperty, IntProperty
 from bpy.types import Panel
+import mathutils
 
 #
 # Add additional functions here
@@ -148,8 +149,44 @@ class OBJECT_OT_set_pivot_to_meshes_auto(bpy.types.Operator):
     bl_label = "Set Pivot to Meshes (auto)"
 
     def execute(self, context):
-        # Tu można dodać logikę ustawiania pivotów
-        self.report({'INFO'}, "Set Pivot to Meshes (auto) executed")
+        scene = context.scene
+        trank_names = [item.name for item in scene.trank_objects]
+        branch_names = [item.name for item in scene.branch_objects]
+
+        # Zbierz wszystkie współrzędne wierzchołków z obiektów trank (w globalnych)
+        trank_verts = []
+        for name in trank_names:
+            obj = bpy.data.objects.get(name)
+            if obj and obj.type == 'MESH':
+                mesh = obj.data
+                mat = obj.matrix_world
+                trank_verts.extend([mat @ v.co for v in mesh.vertices])
+
+        if not trank_verts:
+            self.report({'WARNING'}, "No vertices found in trank objects!")
+            return {'CANCELLED'}
+
+        # Dla każdego obiektu branch znajdź najbliższy vertex i ustaw pivot
+        for name in branch_names:
+            obj = bpy.data.objects.get(name)
+            if obj and obj.type == 'MESH':
+                # Znajdź najbliższy vertex
+                obj_loc = obj.location
+                min_dist = None
+                nearest = None
+                for v in trank_verts:
+                    dist = (obj_loc - v).length
+                    if min_dist is None or dist < min_dist:
+                        min_dist = dist
+                        nearest = v
+                if nearest is not None:
+                    # Przesuń pivot (origin) obiektu na pozycję nearest
+                    # Zachowaj transformację obiektu
+                    delta = nearest - obj.location
+                    obj.data.transform(mathutils.Matrix.Translation(-delta))
+                    obj.location = nearest
+
+        self.report({'INFO'}, "Pivots set for branch objects")
         return {'FINISHED'}
 
 class VIEW3D_PT_easywindsetup_panel(bpy.types.Panel):
