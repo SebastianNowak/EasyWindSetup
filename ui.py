@@ -1024,6 +1024,102 @@ class OBJECT_OT_get_by_names(bpy.types.Operator):
         print("=== [EasyWindSetup] get_by_names execution END ===")
         return {'FINISHED'}
 
+class OBJECT_OT_adjust_hierarchy(bpy.types.Operator):
+    """Adjust hierarchy: leaves parented to nearest branch, branches to nearest trunk"""
+    bl_idname = "object.adjust_hierarchy"
+    bl_label = "Adjust hierarchy"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        import time
+        scene = context.scene
+
+        # Move all trunk, branch, leaf objects to the Scene Collection (master collection)
+        trunk_names = [item.name for item in scene.trunk_objects]
+        branch_names = [item.name for item in scene.branch_objects]
+        leaf_names = [item.name for item in scene.leaf_objects]
+        all_names = set(trunk_names + branch_names + leaf_names)
+        master_collection = bpy.context.scene.collection
+
+        for obj_name in all_names:
+            obj = bpy.data.objects.get(obj_name)
+            if obj:
+                # Unlink from all collections except master
+                for col in list(obj.users_collection):
+                    if col != master_collection:
+                        col.objects.unlink(obj)
+                # Link to master collection if not already
+                if obj.name not in master_collection.objects:
+                    master_collection.objects.link(obj)
+
+        # Remove all empty collections except master
+        for col in list(bpy.data.collections):
+            if col != master_collection and len(col.objects) == 0:
+                bpy.data.collections.remove(col)
+
+        trunk_objs = [bpy.data.objects.get(name) for name in trunk_names if bpy.data.objects.get(name)]
+        branch_objs = [bpy.data.objects.get(name) for name in branch_names if bpy.data.objects.get(name)]
+        leaf_objs = [bpy.data.objects.get(name) for name in leaf_names if bpy.data.objects.get(name)]
+
+        total = len(leaf_objs) + len(branch_objs)
+        done = 0
+        wm = context.window_manager
+        wm.progress_begin(0, total)
+
+        # Leaves -> nearest branch
+        for leaf in leaf_objs:
+            min_dist = None
+            nearest_branch = None
+            if leaf is None or leaf.type != 'MESH':
+                done += 1
+                wm.progress_update(done)
+                continue
+            leaf_verts = [leaf.matrix_world @ v.co for v in leaf.data.vertices]
+            for branch in branch_objs:
+                if branch is None or branch.type != 'MESH':
+                    continue
+                branch_verts = [branch.matrix_world @ v.co for v in branch.data.vertices]
+                for v_leaf in leaf_verts:
+                    for v_branch in branch_verts:
+                        dist = (v_leaf - v_branch).length
+                        if min_dist is None or dist < min_dist:
+                            min_dist = dist
+                            nearest_branch = branch
+            if nearest_branch:
+                leaf.parent = nearest_branch
+                leaf.matrix_parent_inverse = nearest_branch.matrix_world.inverted()
+            done += 1
+            wm.progress_update(done)
+
+        # Branches -> nearest trunk
+        for branch in branch_objs:
+            min_dist = None
+            nearest_trunk = None
+            if branch is None or branch.type != 'MESH':
+                done += 1
+                wm.progress_update(done)
+                continue
+            branch_verts = [branch.matrix_world @ v.co for v in branch.data.vertices]
+            for trunk in trunk_objs:
+                if trunk is None or trunk.type != 'MESH':
+                    continue
+                trunk_verts = [trunk.matrix_world @ v.co for v in trunk.data.vertices]
+                for v_branch in branch_verts:
+                    for v_trunk in trunk_verts:
+                        dist = (v_branch - v_trunk).length
+                        if min_dist is None or dist < min_dist:
+                            min_dist = dist
+                            nearest_trunk = trunk
+            if nearest_trunk:
+                branch.parent = nearest_trunk
+                branch.matrix_parent_inverse = nearest_trunk.matrix_world.inverted()
+            done += 1
+            wm.progress_update(done)
+
+        wm.progress_end()
+        self.report({'INFO'}, "Hierarchy adjusted")
+        return {'FINISHED'}
+
 class VIEW3D_PT_easywindsetup_panel(bpy.types.Panel):
     """Creates a Panel in the 3D View"""
     bl_label = "Easy Wind Setup"
@@ -1114,6 +1210,11 @@ class VIEW3D_PT_easywindsetup_panel(bpy.types.Panel):
             "leaf_objects_index"
         )
 
+        # --- DODATKOWY PRZYCISK NA DOLE PANELU ---
+        row = layout.row()
+        row.enabled = enabled
+        row.operator("object.adjust_hierarchy", text="Adjust hierarchy", icon="SCENE_DATA")
+
 def register():
     bpy.utils.register_class(TRUNK_UL_object_list)
     bpy.utils.register_class(BRANCH_UL_object_list)
@@ -1140,6 +1241,7 @@ def register():
     bpy.utils.register_class(OBJECT_OT_fix_pivot_rotation_from_uv)
     bpy.utils.register_class(OBJECT_OT_fix_pivot_rotation_from_uv_xz)
     bpy.utils.register_class(OBJECT_OT_get_by_names)
+    bpy.utils.register_class(OBJECT_OT_adjust_hierarchy)
     bpy.utils.register_class(VIEW3D_PT_easywindsetup_panel)
 
 def unregister():
@@ -1168,6 +1270,7 @@ def unregister():
     bpy.utils.unregister_class(OBJECT_OT_fix_pivot_rotation_from_uv)
     bpy.utils.unregister_class(OBJECT_OT_fix_pivot_rotation_from_uv_xz)
     bpy.utils.unregister_class(OBJECT_OT_get_by_names)
+    bpy.utils.unregister_class(OBJECT_OT_adjust_hierarchy)
     bpy.utils.unregister_class(VIEW3D_PT_easywindsetup_panel)
     bpy.utils.unregister_class(VIEW3D_PT_easywindsetup_panel)
     bpy.utils.unregister_class(OBJECT_OT_set_pivot_to_mesh_manually)
