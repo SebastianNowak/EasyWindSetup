@@ -164,7 +164,6 @@ class OBJECT_OT_set_pivot_to_meshes_auto(bpy.types.Operator):
         branch_names = [item.name for item in scene.branch_objects]
         leaf_names = [item.name for item in scene.leaf_objects]
 
-        # Zbierz wszystkie vertexy z trunk (w globalnych)
         trunk_verts = []
         for name in trunk_names:
             obj = bpy.data.objects.get(name)
@@ -173,7 +172,6 @@ class OBJECT_OT_set_pivot_to_meshes_auto(bpy.types.Operator):
                 mat = obj.matrix_world
                 trunk_verts.extend([mat @ v.co for v in mesh.vertices])
 
-        # Zbierz wszystkie vertexy z branch (w globalnych)
         branch_verts = []
         for name in branch_names:
             obj = bpy.data.objects.get(name)
@@ -182,18 +180,23 @@ class OBJECT_OT_set_pivot_to_meshes_auto(bpy.types.Operator):
                 mat = obj.matrix_world
                 branch_verts.extend([mat @ v.co for v in mesh.vertices])
 
-        # Loader/progress bar setup
         total = len(branch_names) + len(leaf_names)
         done = 0
 
         wm = context.window_manager
         wm.progress_begin(0, total)
 
-        # Dla każdego branch: znajdź najbliższy vertex w trunk względem vertexów branch i ustaw pivot na tym vertexie
+        # Dla każdego branch: ustaw pivot przez origin_set
         if trunk_verts:
             for name in branch_names:
                 obj = bpy.data.objects.get(name)
                 if obj and obj.type == 'MESH':
+                    # Odłącz parenta na czas operacji
+                    old_parent = obj.parent
+                    if old_parent:
+                        obj.parent = None
+                        bpy.context.view_layer.update()
+                    # Szukaj najbliższego punktu
                     obj_mesh = obj.data
                     obj_mat = obj.matrix_world
                     verts_global = [obj_mat @ v.co for v in obj_mesh.vertices]
@@ -208,18 +211,28 @@ class OBJECT_OT_set_pivot_to_meshes_auto(bpy.types.Operator):
                                 nearest_trunk_v = v_trunk
                                 nearest_branch_v = v_branch
                     if nearest_branch_v is not None:
-                        delta = nearest_branch_v - obj.location
-                        obj.data.transform(mathutils.Matrix.Translation(-delta))
-                        obj.location = nearest_branch_v
+                        # Ustaw 3D cursor i origin_set
+                        bpy.context.scene.cursor.location = nearest_branch_v
+                        bpy.context.view_layer.objects.active = obj
+                        bpy.ops.object.select_all(action='DESELECT')
+                        obj.select_set(True)
+                        bpy.ops.object.origin_set(type='ORIGIN_CURSOR')
+                    # Przywróć parenta
+                    if old_parent:
+                        obj.parent = old_parent
+                        bpy.context.view_layer.update()
                 done += 1
                 wm.progress_update(done)
-                # time.sleep(0.01) # optionally slow down for testing
 
-        # Dla każdego leaf: znajdź najbliższy vertex w branch względem vertexów leaf i ustaw pivot na tym vertexie
+        # Analogicznie dla leaf
         if branch_verts:
             for name in leaf_names:
                 obj = bpy.data.objects.get(name)
                 if obj and obj.type == 'MESH':
+                    old_parent = obj.parent
+                    if old_parent:
+                        obj.parent = None
+                        bpy.context.view_layer.update()
                     obj_mesh = obj.data
                     obj_mat = obj.matrix_world
                     verts_global = [obj_mat @ v.co for v in obj_mesh.vertices]
@@ -234,12 +247,16 @@ class OBJECT_OT_set_pivot_to_meshes_auto(bpy.types.Operator):
                                 nearest_branch_v = v_branch
                                 nearest_leaf_v = v_leaf
                     if nearest_leaf_v is not None:
-                        delta = nearest_leaf_v - obj.location
-                        obj.data.transform(mathutils.Matrix.Translation(-delta))
-                        obj.location = nearest_leaf_v
+                        bpy.context.scene.cursor.location = nearest_leaf_v
+                        bpy.context.view_layer.objects.active = obj
+                        bpy.ops.object.select_all(action='DESELECT')
+                        obj.select_set(True)
+                        bpy.ops.object.origin_set(type='ORIGIN_CURSOR')
+                    if old_parent:
+                        obj.parent = old_parent
+                        bpy.context.view_layer.update()
                 done += 1
                 wm.progress_update(done)
-                # time.sleep(0.01) # optionally slow down for testing
 
         wm.progress_end()
         self.report({'INFO'}, "Pivots set for branch and leaf objects")
@@ -1297,12 +1314,5 @@ def unregister():
     bpy.utils.unregister_class(OBJECT_OT_fix_pivot_rotation_from_uv_xz)
     bpy.utils.unregister_class(OBJECT_OT_get_by_names)
     bpy.utils.unregister_class(VIEW3D_PT_easywindsetup_panel)
-    bpy.utils.unregister_class(VIEW3D_PT_easywindsetup_panel)
-    bpy.utils.unregister_class(OBJECT_OT_set_pivot_to_mesh_manually)
-    bpy.utils.unregister_class(OBJECT_OT_fix_pivot_rotation)
-    bpy.utils.unregister_class(OBJECT_OT_set_pivot_from_uv)
-    bpy.utils.unregister_class(OBJECT_OT_fix_pivot_rotation_from_uv)
-    bpy.utils.unregister_class(OBJECT_OT_fix_pivot_rotation_from_uv_xz)
-    bpy.utils.unregister_class(OBJECT_OT_get_by_names)
     bpy.utils.unregister_class(VIEW3D_PT_easywindsetup_panel)
     bpy.utils.unregister_class(VIEW3D_PT_easywindsetup_panel)
